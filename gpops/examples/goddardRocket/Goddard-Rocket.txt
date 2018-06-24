@@ -1,0 +1,107 @@
+ _______________________________________________________________________________________________________
+|                                                                                                       |
+| GPOPS Version 5.1 Running with the hp-Adaptive Radau Pseudospectral Method and SNOPT 7.1              |
+|_______________________________________________________________________________________________________|
+|                                                                                                       |
+| GPOPS Copyright (c) 2008-2011 Anil V. Rao and David Benson.                                           |
+|_______________________________________________________________________________________________________|
+|                                                                                                       |
+| SNOPT (c) Copyright Regents of the University of California and Stanford University.                  |
+|_______________________________________________________________________________________________________|
+|                                                                                                       |
+| Downloading, using, copying, or modifying the GPOPS code constitutes an agreement to ALL of the terms |
+| of the GPOPS license. Please see the LICENSE page on the GPOPS website at http://www.gpops.org.       |
+|_______________________________________________________________________________________________________|
+                                                                                                        
+
+ __________________________________________
+|                                          |
+|>>>>>>>>> Information in Phase 1 <<<<<<<<<|
+|__________________________________________|
+
+State 	1
+	 Start of Phase:    	0 <= State 1 <= 0
+	 During Phase:      	0 <= State 1 <= 30000
+	 Terminus of Phase: 	0 <= State 1 <= 30000
+State 	2
+	 Start of Phase:    	0 <= State 2 <= 0
+	 During Phase:      	-1500 <= State 2 <= 1500
+	 Terminus of Phase: 	-1500 <= State 2 <= 1500
+State 	3
+	 Start of Phase:    	3 <= State 3 <= 3
+	 During Phase:      	0.6 <= State 3 <= 3
+	 Terminus of Phase: 	0.6 <= State 3 <= 3
+
+Control 	1
+	 During Phase:    	193.044 <= Control 1 <= 193.044
+
+No Parameters in Phase 1
+
+No Path Constraints in Phase 1
+
+No Event Constraints in Phase 1
+
+Phase Duration: 1 <= duration <= 1000
+
+
+ __________________________________________
+|                                          |
+|>>>>>>>>> Information in Phase 2 <<<<<<<<<|
+|__________________________________________|
+
+State 	1
+	 Start of Phase:    	0 <= State 1 <= 30000
+	 During Phase:      	0 <= State 1 <= 30000
+	 Terminus of Phase: 	0 <= State 1 <= 30000
+State 	2
+	 Start of Phase:    	-1500 <= State 2 <= 1500
+	 During Phase:      	-1500 <= State 2 <= 1500
+	 Terminus of Phase: 	-1500 <= State 2 <= 1500
+State 	3
+	 Start of Phase:    	0.6 <= State 3 <= 3
+	 During Phase:      	0.6 <= State 3 <= 3
+	 Terminus of Phase: 	0.6 <= State 3 <= 3
+
+Control 	1
+	 During Phase:    	0 <= Control 1 <= 193.044
+
+No Parameters in Phase 2
+
+Path Constraint 	1
+	 During Phase:    	0 <= Path 1 <= 0
+
+Event Constraint 	1
+				0 <= Event 1 <= 0
+
+Phase Duration: 1 <= duration <= 1000
+
+
+ __________________________________________
+|                                          |
+|>>>>>>>>> Information in Phase 3 <<<<<<<<<|
+|__________________________________________|
+
+State 	1
+	 Start of Phase:    	0 <= State 1 <= 30000
+	 During Phase:      	0 <= State 1 <= 30000
+	 Terminus of Phase: 	0 <= State 1 <= 30000
+State 	2
+	 Start of Phase:    	-1500 <= State 2 <= 1500
+	 During Phase:      	-1500 <= State 2 <= 1500
+	 Terminus of Phase: 	-1500 <= State 2 <= 1500
+State 	3
+	 Start of Phase:    	0.6 <= State 3 <= 3
+	 During Phase:      	0.6 <= State 3 <= 3
+	 Terminus of Phase: 	1 <= State 3 <= 1
+
+Control 	1
+	 During Phase:    	0 <= Control 1 <= 0
+
+No Parameters in Phase 3
+
+No Path Constraints in Phase 3
+
+No Event Constraints in Phase 3
+
+Phase Duration: 1 <= duration <= 1000
+
