@@ -33,11 +33,12 @@ V_max = 3.6
 SOC_min = 0.25
 SOC_max = 0.75
 
+#Voc from file
+Voc = np.fromfile('Voc.dat',dtype=float)
+
 #free parameters
-t_max = 1799
+t_max = 1800
 dt = 1
-V_oc = 1.5 #assume time-invariant for time being
-C_batt = 3600 #guess?
 
 #grids
 SOC_grid = np.arange(SOC_min,SOC_max,0.005)
