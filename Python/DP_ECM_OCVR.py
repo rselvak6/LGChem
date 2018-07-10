@@ -59,14 +59,14 @@ V[:,N] = 0
 #%% DP
 def DP():
     start = tm.time()
-    for k in range(t_max,t_0-1,-dt):
+    for k in range(t_max-1,t_0-1,-dt):
         for idx in range(0,num_states):
             
             #lower/upper control bounds
             v_oc = [V_oc[len(V_oc[:,0])*x,1] for x in V_oc[:,0] if x==0.25][0]
             lb = max(I_min, C_batt/dt*(SOC_grid[idx]-SOC_max), (V_min-v_oc)/R_0)
             ub = min(I_max, C_batt/dt*(SOC_grid[idx]-SOC_min), (V_max-v_oc)/R_0)
-            if k==t_max:
+            if k==t_max-1:
                 ub = min(I_max, C_batt/dt*(SOC_grid[idx]-SOC_f), (V_max-v_oc)/R_0) 
                 
             #control initialization 
@@ -82,6 +82,7 @@ def DP():
             V_nxt = np.interp(SOC_grid,V[:,k+1],SOC_nxt)
             
             #Bellman
+            print(max(c_k + V_nxt))
             [V[idx,k],ind] = max(c_k+V_nxt)
             
             #save optimal control
