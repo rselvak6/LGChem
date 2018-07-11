@@ -25,7 +25,7 @@ V_max = 3.6;
 z_min = 0.1;
 z_max = 0.9;
 C_batt = 2.3*3600;
-t_max = 300;
+t_max = 5*60;
 dt = 1;
 save ECM_params.mat;
 %% Voc save
@@ -57,13 +57,13 @@ for k = N:-1:1 %time
         c_voc = voc(soc==c_soc); %return the voc value when soc = c_soc 
         
         % Bounds
-        lb = max([I_min, C_batt/dt*(c_soc-z_max),(V_min-c_voc),R_0]);
-        ub = min([I_max, C_batt/dt*(c_soc-z_min),(V_max-c_voc),R_0]);
+        lb = max([I_min, C_batt/dt*(c_soc-z_max),(V_min-c_voc)/R_0]);
+        ub = min([I_max, C_batt/dt*(c_soc-z_min),(V_max-c_voc)/R_0]);
         
         % Control grid
         I_grid = linspace(lb,ub,200)';
         % Cost-per-time-step
-        g_k = -1*I_grid*dt;
+        g_k = dt.*I_grid;
         
         % State dynamics
         SOC_nxt = c_soc+ dt/C_batt.*I_grid;
@@ -71,7 +71,7 @@ for k = N:-1:1 %time
         % Linear interpolation for value function
         V_nxt = interp1(SOC_grid,V(:,k+1),SOC_nxt,'linear');   
         % Bellman
-        [V(idx, k), ind] = min(g_k + V_nxt);
+        [V(idx, k), ind] = min(-g_k + V_nxt);
         
         % Save Optimal Control
         u_star(idx,k) = I_grid(ind);
@@ -79,6 +79,7 @@ for k = N:-1:1 %time
 end
 
 solveTime = toc;
+clc;
 fprintf(1,'DP Solver Time %2.2f sec \n',solveTime);
 
 %% Simulate Results
@@ -86,63 +87,64 @@ fprintf(1,'DP Solver Time %2.2f sec \n',solveTime);
 % Preallocate
 SOC_sim = zeros(N,1);
 I_sim = zeros(N,1);
+V_sim = zeros(N,1);
 
 % Initialize
 SOC_0 = 0.5;    
 SOC_sim(1) = SOC_0;
 
 % Simulate Battery Dynamics
-for k = 1:(N-1)
-    
+for k = 1:N
     % Calculate optimal control for given state
     I_sim(k) = interp1(SOC_grid,u_star(:,k),SOC_sim(k),'linear');
     
-    % SOC dynamics
-    SOC_sim(k+1) = SOC_sim(k) + dt/C_batt.*I_sim(k);
+    % Terminal voltage  
+    V_sim(k) = voc(soc==round(SOC_sim(k),3)) + I_sim(k).*R_0;
     
+    % SOC dynamics
+    SOC_sim(k+1) = SOC_sim(k) + dt/C_batt.*I_sim(k); 
 end
 
-fprintf(1,'Final SOC %2.4f \n',SOC_sim(N));
+fprintf(1,'Final SOC %2.3f \n',SOC_sim(N));
+fprintf(1,'Terminal voltage %2.3f \n',V_sim(N-1));
 %% Plot Results
-figure(3); clf;
+figure; clf;
+t = linspace(t_0,t_max,t_max-t_0);
 
-subplot(2,2,1);
-% UDDS speed versus time 
-plot(t, v_dc);
-title('UDDS speed vs. time');
+%current
+subplot(3,1,1);
+plot(t, I_sim,'b');
+hold on
+plot(t,I_min.*ones(length(t),1),'r--','LineWidth',0.5);
+plot(t,I_max.*ones(length(t),1),'r--','LineWidth',0.5);
+hold off
+title('Current vs. time');
 xlabel('Time [s]');
-ylabel('Cycle speed [m/s]');
+ylabel('Current [A]');
 set(gca,'FontSize',fs)
 
-subplot(2,2,2);
-% SOC versus time
-plot(t, SOC_sim);
+%terminal voltage
+subplot(3,1,2);
+plot(t, V_sim,'b');
+hold on
+plot(t,V_min.*ones(length(t),1),'r--','LineWidth',0.5);
+plot(t,V_max.*ones(length(t),1),'r--','LineWidth',0.5);
+hold off
+title('Terminal voltage vs. time');
+xlabel('Time [s]');
+ylabel('V_t [V]');
+set(gca,'FontSize',fs)
+
+%SOC
+subplot(3,1,3);
+plot(t, SOC_sim(1:N),'b');
+hold on
+plot(t,z_min.*ones(length(t),1),'r--','LineWidth',0.5);
+plot(t,z_max.*ones(length(t),1),'r--','LineWidth',0.5);
+hold off
 title('SOC vs. time');
 xlabel('Time [s]');
-ylabel('State of charge');
-set(gca,'FontSize',fs)
-
-subplot(2,2,3);
-% Accumulated fuel consumption [g] versus time
-J = zeros(length(J_sim),1);
-for i=1:length(J_sim)
-    for j=1:i
-        J(i) = J(i) + J_sim(j);
-    end
-end
-plot(t, J);
-title('Accumulated fuel consumption vs. time');
-xlabel('Time [s]');
-ylabel('Fuel consumption [g]');
-set(gca,'FontSize',fs)
-
-subplot(2,2,4);
-% Battery and engine power [kW] versus time
-plot(t, I_sim/1e3,t, P_eng_sim/1e3);
-title('Engine and battery power vs. time');
-xlabel('Time [s]');
-ylabel('Power [kW]');
-legend('Battery power','Engine power','Location','northwest');
+ylabel('SOC');
 set(gca,'FontSize',fs)
 %% Outdated
 %{
