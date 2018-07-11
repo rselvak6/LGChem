@@ -10,7 +10,7 @@ Rc = 1.94;
 Ru = 3.08;
 Cc = 62.7;
 Cs = 4.5;
-z_0 = 0.5;
+z_0 = 0.25;
 T_inf = 25;
 t_0 = 0;
 C_1 = 2500;
@@ -37,13 +37,14 @@ save OCV_params.mat;
 clc; clear;
 load ECM_params.mat;
 load OCV_params.mat;
+load zo_025.mat;
 fs = 15;
 clear VOC VOC_data;
 %% Playground
 %% Grid State and Preallocate
 SOC_grid = (z_min:0.005:z_max)';
 ns = length(SOC_grid);  % #states
-N = t_max-t_0; % #iterations
+N = (t_max-t_0)/dt; % #iterations
 V = inf*ones(ns,N+1); % #value function
 u_star = zeros(ns,N);% #control
 
@@ -54,7 +55,7 @@ V(:,N+1) = 0; %Bellman terminal boundary condition
 for k = N:-1:1 %time
     for idx = 1:ns %state (SOC)
         c_soc = SOC_grid(idx);
-        c_voc = voc(soc==c_soc); %return the voc value when soc = c_soc 
+        c_voc = voc(soc==round(c_soc,3)); %return the voc value when soc = c_soc 
         
         % Bounds
         lb = max([I_min, C_batt/dt*(c_soc-z_max),(V_min-c_voc)/R_0]);
@@ -63,7 +64,8 @@ for k = N:-1:1 %time
         % Control grid
         I_grid = linspace(lb,ub,200)';
         % Cost-per-time-step
-        g_k = dt.*I_grid;
+        cv = ones(length(I_grid),1).*abs(c_voc-V_max) + I_grid.*R_0;
+        g_k = dt.*I_grid-cv;
         
         % State dynamics
         SOC_nxt = c_soc+ dt/C_batt.*I_grid;
@@ -88,65 +90,90 @@ fprintf(1,'DP Solver Time %2.2f sec \n',solveTime);
 SOC_sim = zeros(N,1);
 I_sim = zeros(N,1);
 V_sim = zeros(N,1);
+Voc_sim = zeros(N,1);
 
 % Initialize
-SOC_0 = 0.5;    
-SOC_sim(1) = SOC_0;
+SOC_sim(1) = z_0;
 
 % Simulate Battery Dynamics
 for k = 1:N
     % Calculate optimal control for given state
     I_sim(k) = interp1(SOC_grid,u_star(:,k),SOC_sim(k),'linear');
     
-    % Terminal voltage  
-    V_sim(k) = voc(soc==round(SOC_sim(k),3)) + I_sim(k).*R_0;
+    % Voc, terminal voltage 
+    Voc_sim(k) = voc(soc==round(SOC_sim(k),3));
+    V_sim(k) = Voc_sim(k) + I_sim(k).*R_0;
     
     % SOC dynamics
     SOC_sim(k+1) = SOC_sim(k) + dt/C_batt.*I_sim(k); 
 end
 
-fprintf(1,'Final SOC %2.3f \n',SOC_sim(N));
-fprintf(1,'Terminal voltage %2.3f \n',V_sim(N-1));
+%fprintf(1,'Final SOC %2.3f \n',SOC_sim(N));
+%fprintf(1,'Terminal voltage %2.3f \n',V_sim(N-1));
 %% Plot Results
 figure; clf;
-t = linspace(t_0,t_max,t_max-t_0);
+t_base = linspace(t_0,t_max,length(a));
+t = linspace(t_0,t_max,N);
 
 %current
-subplot(3,1,1);
-plot(t, I_sim,'b');
+subplot(3,2,[1 2]);
+plot(t, I_sim,'b','LineWidth',1.5,'DisplayName','Modified value fn');
 hold on
-plot(t,I_min.*ones(length(t),1),'r--','LineWidth',0.5);
-plot(t,I_max.*ones(length(t),1),'r--','LineWidth',0.5);
+plot(t_base, a,'k','LineWidth',1.5,'DisplayName','Base case');
+plot(t,I_min.*ones(length(t),1),'r--','LineWidth',0.5,...
+    'DisplayName','lb');
+plot(t,I_max.*ones(length(t),1),'r--','LineWidth',0.5,...
+    'DisplayName','ub');
 hold off
-title('Current vs. time');
-xlabel('Time [s]');
-ylabel('Current [A]');
-set(gca,'FontSize',fs)
-
-%terminal voltage
-subplot(3,1,2);
-plot(t, V_sim,'b');
-hold on
-plot(t,V_min.*ones(length(t),1),'r--','LineWidth',0.5);
-plot(t,V_max.*ones(length(t),1),'r--','LineWidth',0.5);
-hold off
-title('Terminal voltage vs. time');
-xlabel('Time [s]');
-ylabel('V_t [V]');
-set(gca,'FontSize',fs)
+title('Current vs. time','FontSize',fs);
+xlabel('\it{t} \rm{[s]}','FontSize',13);
+ylabel('\it{I^{*}} \rm{[A]}','FontSize',13);
+lgd = legend('show');
+lgd.FontSize = 10;
+lgd.Location = 'East';
 
 %SOC
-subplot(3,1,3);
-plot(t, SOC_sim(1:N),'b');
+subplot(3,2,[3 4]);
+plot(t, SOC_sim(1:N),'b','LineWidth',1.5,'DisplayName','z_0=0.5');
 hold on
-plot(t,z_min.*ones(length(t),1),'r--','LineWidth',0.5);
-plot(t,z_max.*ones(length(t),1),'r--','LineWidth',0.5);
+plot(t_base, b(1:length(a)),'k','LineWidth',1.5,'DisplayName','z_0=0.25');
+plot(t,z_min.*ones(length(t),1),'r--','LineWidth',0.5,...
+    'DisplayName','z_{min}');
+plot(t,z_max.*ones(length(t),1),'r--','LineWidth',0.5,...
+    'DisplayName','z_{min}');
 hold off
-title('SOC vs. time');
-xlabel('Time [s]');
-ylabel('SOC');
-set(gca,'FontSize',fs)
+title('SOC vs. time','FontSize',fs);
+xlabel('\it{t} \rm{[s]}','FontSize',13);
+ylabel('\it{z}','FontSize',13);
+
+%terminal voltage
+subplot(3,2,5);
+plot(t, V_sim,'b','LineWidth',1.5,'DisplayName','z_0=0.5');
+hold on
+plot(t_base, c,'k','LineWidth',1.5,'DisplayName','z_0=0.25');
+plot(t,V_min.*ones(length(t),1),'r--','LineWidth',0.5,...
+    'DisplayName','V_{min}');
+plot(t,V_max.*ones(length(t),1),'r--','LineWidth',0.5,...
+    'DisplayName','V_{max}');
+hold off
+title('Terminal voltage vs. time','FontSize',fs);
+xlabel('\it{t} \rm{[s]}','FontSize',13);
+ylabel('\it{V_T} \rm{[V]}','FontSize',13);
+
+subplot(3,2,6);
+plot(t, Voc_sim,'b','LineWidth',1);
+hold on
+plot(t_base, d,'k','LineWidth',1);
+hold off
+title('Open circuit voltage vs. time','FontSize',fs);
+xlabel('\it{t} \rm{[s]}','FontSize',13);
+ylabel('\it{V_{oc}} \rm{[V]}','FontSize',13);
 %% Outdated
+a = I_sim;
+b = SOC_sim;
+c = V_sim;
+d = Voc_sim;
+save zo_05.mat a b c d
 %{
 %% Write Data
 p_nm = ["Rc" "Ru" "Cc" "Cs" "z_0" "T_inf" "t_0" "C_1" "C_2" "R_0" "R_1" ...
