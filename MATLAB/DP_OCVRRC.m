@@ -1,7 +1,7 @@
-%% OCV-R
-%   DP formulation for the max charge problem with OCV-R ECM 
+%% OCV-R-RC
+%   DP formulation for the max charge problem with OCV-R-RC ECM 
 %   Raja Selvakumar
-%   07/10/2018
+%   07/12/2018
 %   energy, Controls, and Application Lab (eCAL)
 
 clc; clear;
@@ -23,10 +23,10 @@ I_max = 46;
 V_min = 2;
 V_max = 3.6;
 z_min = 0.1;
-z_max = 0.9;
+z_max = 0.75;
 C_batt = 2.3*3600;
 t_max = 5*60;
-dt = 1;
+dt = 0.1;
 save ECM_params.mat;
 %% Voc save
 VOC_data = csvread('Voc.dat',1,0);
@@ -37,45 +37,58 @@ save OCV_params.mat;
 clc; clear;
 load ECM_params.mat;
 load OCV_params.mat;
-load zo_05_minSOC.mat;
+load zo_05_minSOC_075target.mat;
 fs = 15;
 clear VOC VOC_data;
 %% Playground
 %% Grid State and Preallocate
-SOC_grid = (z_min:0.005:z_max)';
-ns = length(SOC_grid);  % #states
+SOC_grid = (z_min:0.05:z_max)';
+V1_min = V_min-max(voc)-I_max*R_0;
+V1_max = V_max-min(voc)-I_min*R_0;
+V1_grid = (V1_min:0.1:V1_max)';
+
+ns = [length(SOC_grid) length(V1_grid)];  % #states
 N = (t_max-t_0)/dt; % #iterations
-V = inf*ones(ns,N+1); % #value function
-u_star = zeros(ns,N);% #control
+V = inf*ones(ns(1),ns(2),N+1); % #value function
+u_star = zeros(ns(1),ns(2),N);% #control
 %% Solve DP
 tic;
 V(:,N+1) = 0; %Bellman terminal boundary condition
 
 for k = N:-1:1 %time
-    for idx = 1:ns %state (SOC)
-        c_soc = SOC_grid(idx);
-        c_voc = voc(soc==round(c_soc,3)); %return the voc value when soc = c_soc 
+    for ii = 1:ns(1) %SOC
+        for jj=1:ns(2) %V_1
+            c_soc = SOC_grid(ii);
+            c_v1 = V1_grid(jj);
+            c_voc = voc(soc==round(c_soc,3)); %return voc when soc = c_soc 
         
-        % Bounds
-        lb = max([I_min, C_batt/dt*(c_soc-z_max),(V_min-c_voc)/R_0]);
-        ub = min([I_max, C_batt/dt*(c_soc-z_min),(V_max-c_voc)/R_0]);
-        
-        % Control grid
-        I_grid = linspace(lb,ub,200)';
-        % Cost-per-time-step
-        cv = ones(length(I_grid),1).*abs(c_voc-V_max) + I_grid.*R_0;
-        %g_k = dt.*I_grid-cv;
-        g_k = -(c_soc-0.75)^2;
-        % State dynamics
-        SOC_nxt = c_soc+ dt/C_batt.*I_grid;
-        
-        % Linear interpolation for value function
-        V_nxt = interp1(SOC_grid,V(:,k+1),SOC_nxt,'linear');   
-        % Bellman
-        [V(idx, k), ind] = min(-g_k + V_nxt);
-        
-        % Save Optimal Control
-        u_star(idx,k) = I_grid(ind);
+            % Bounds
+            z_lb = C_batt/dt*(c_soc-z_max);
+            z_ub = C_batt/dt*(c_soc-z_min);
+            V1_lb = C_1/(C_1*R_0+dt)*(V_min-c_voc-c_v1*(1-dt/(R_1*C_1)));
+            V1_ub = C_1/(C_1*R_0+dt)*(V_max-c_voc-c_v1*(1-dt/(R_1*C_1)));
+            lb = max([I_min,z_lb]);
+            ub = min([I_max,z_ub]);
+
+            % Control grid
+            I_grid = linspace(lb,ub,200)';
+            % Cost-per-time-step
+            %cv = ones(length(I_grid),1).*abs(c_voc-V_max) + I_grid.*R_0;
+            %g_k = dt.*I_grid-cv;
+            g_k = -(c_soc-z_max)^2;
+            
+            % State dynamics
+            SOC_nxt = c_soc+ dt/C_batt.*I_grid;
+            V1_nxt = c_v1*(1-dt/(R_1*C_1))+dt/C_1.*I_grid;
+            
+            % Linear interpolation for value function
+            V_nxt = interp2(SOC_grid,V1_grid,V(:,:,k+1)',SOC_nxt,...
+                V1_nxt,'linear');   
+            [V(ii,jj, k), ind] = min(-g_k + V_nxt); %Bellman
+
+            % Save Optimal Control
+            u_star(ii,jj,k) = I_grid(ind);
+        end
     end
 end
 
@@ -89,26 +102,30 @@ fprintf(1,'DP Solver Time %2.2f sec \n',solveTime);
 SOC_sim = zeros(N,1);
 I_sim = zeros(N,1);
 V_sim = zeros(N,1);
+V1_sim = zeros(N,1);
 Voc_sim = zeros(N,1);
 
 % Initialize
 SOC_sim(1) = z_0;
+V1_sim(1) = 0;
 
 % Simulate Battery Dynamics
-for k = 1:N
+for k = 1:N-1
     % Calculate optimal control for given state
-    I_sim(k) = interp1(SOC_grid,u_star(:,k),SOC_sim(k),'linear');
+    I_sim(k) = interp2(SOC_grid,V1_grid,u_star(:,:,k+1)',SOC_sim(k),...
+        V1_sim(k),'linear');
     
     % Voc, terminal voltage 
     Voc_sim(k) = voc(soc==round(SOC_sim(k),3));
-    V_sim(k) = Voc_sim(k) + I_sim(k).*R_0;
+    V_sim(k) = Voc_sim(k) + V1_sim(k) + I_sim(k).*R_0;
     
-    % SOC dynamics
-    SOC_sim(k+1) = SOC_sim(k) + dt/C_batt.*I_sim(k); 
+    % Dynamics
+    SOC_sim(k+1) = SOC_sim(k) + dt/C_batt.*I_sim(k);
+    V1_sim(k+1) = V1_sim(k)*(1-dt/(R_1*C_1)) + dt/C_1.*I_sim(k);
 end
 
-%fprintf(1,'Final SOC %2.3f \n',SOC_sim(N));
-%fprintf(1,'Terminal voltage %2.3f \n',V_sim(N-1));
+fprintf(1,'Final SOC %2.3f \n',SOC_sim(N));
+fprintf(1,'Terminal voltage %2.3f \n',V_sim(N));
 %% Plot Results
 figure; clf;
 t_base = linspace(t_0,t_max,length(a));
@@ -116,9 +133,9 @@ t = linspace(t_0,t_max,N);
 
 %current
 subplot(3,2,[1 2]);
-plot(t, I_sim,'b','LineWidth',1.5,'DisplayName','z target: 0.75');
+plot(t, I_sim,'b','LineWidth',1.5,'DisplayName','OCVR-RC');
 hold on
-plot(t_base, a,'k','LineWidth',1.5,'DisplayName','z target: 0.8');
+plot(t_base, a,'k','LineWidth',1.5,'DisplayName','OCVR');
 plot(t,I_min.*ones(length(t),1),'r--','LineWidth',0.5,...
     'DisplayName','lb');
 plot(t,I_max.*ones(length(t),1),'r--','LineWidth',0.5,...
@@ -133,7 +150,7 @@ lgd.Location = 'East';
 
 %SOC
 subplot(3,2,[3 4]);
-plot(t, SOC_sim(1:N),'b','LineWidth',1.5,'DisplayName','z_0=0.5');
+plot(t, SOC_sim,'b','LineWidth',1.5,'DisplayName','z_0=0.5');
 hold on
 plot(t_base, b(1:length(a)),'k','LineWidth',1.5,'DisplayName','z_0=0.25');
 plot(t,z_min.*ones(length(t),1),'r--','LineWidth',0.5,...
