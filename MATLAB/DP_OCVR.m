@@ -25,7 +25,7 @@ V_max = 3.6;
 z_min = 0.1;
 z_max = 0.75;
 C_batt = 2.3*3600;
-t_max = 5*60;
+t_max = 8*60;
 dt = 1;
 save ECM_params.mat;
 %% Voc save
@@ -37,8 +37,6 @@ save OCV_params.mat;
 clc; clear;
 load ECM_params.mat;
 load OCV_params.mat;
-load OCVR_justterm.mat;
-load OCVR_noterm.mat;
 fs = 15;
 clear VOC VOC_data;
 %% Playground
@@ -174,11 +172,11 @@ title('Open circuit voltage vs. time','FontSize',fs);
 xlabel('\it{t} \rm{[s]}','FontSize',13);
 ylabel('\it{V_{oc}} \rm{[V]}','FontSize',13);
 %% Outdated
-a1 = I_sim;
-b1 = SOC_sim;
-c1 = V_sim;
-d1 = Voc_sim;
-save OCVR_justterm.mat a1 b1 c1 d1
+a = I_sim;
+b = SOC_sim;
+c = V_sim;
+d = Voc_sim;
+save OCVR.mat a b c d
 %{
 %% Write Data
 p_nm = ["Rc" "Ru" "Cc" "Cs" "z_0" "T_inf" "t_0" "C_1" "C_2" "R_0" "R_1" ...
