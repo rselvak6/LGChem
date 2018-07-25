@@ -23,11 +23,12 @@ I_max = 46;
 V_min = 2;
 V_max = 3.6;
 z_min = 0.1;
-z_max = 0.75;
+z_max = 0.95;
+z_target = 0.75;
 C_batt = 2.3*3600;
-t_max = 8*60;
+t_max = 300;
 dt = 1;
-beta = 0;
+beta = 0.5;
 save ECM_params.mat;
 %% Voc save
 clear;
@@ -39,8 +40,7 @@ save OCV_params.mat;
 clc; clear;
 load ECM_params.mat;
 load OCV_params.mat;
-load OCVRRC_beta1.mat;
-load OCVRRC_beta05.mat;
+load OCVRRC.mat;
 fs = 15;
 clear VOC VOC_data;
 %% Playground
@@ -59,13 +59,13 @@ u_star = nan*ones(N-1,ns(1),ns(2));% #control
 clc;
 tic;
 for i=1:ns(1)
-    V(end,i,:) = (1-beta)*(SOC_grid(i)-z_max)^2; %terminal boundary condition
+    V(end,i,:) = (1-beta)*(SOC_grid(i)-z_target)^2; %terminal boundary condition
 end
 
 tol = eps(0.5);
 
 for k = (N-1):-1:1 %time
-    if mod(k,5)==0
+    if mod(k,10)==0
         fprintf(1,'Computing Principle of Optimality at %3.0f sec\n',k*dt);
     end
     for ii = 1:ns(1) %SOC
@@ -88,7 +88,7 @@ for k = (N-1):-1:1 %time
             % Cost-per-time-step
             %cv = ones(length(I_grid),1).*abs(c_voc-V_max) + I_grid.*R_0;
             %g_k = dt.*I_grid-cv;
-            g_k = -beta*(c_soc-z_max)^2;
+            g_k = -beta*(c_soc-z_target)^2;
 
             % State dynamics
             SOC_nxt = c_soc+ dt/C_batt.*I_grid;
@@ -124,7 +124,7 @@ V1_sim(1) = 0;
 % Simulate Battery Dynamics
 tic;
 for k = 1:N-1
-    if mod(k,5)==0
+    if mod(k,10)==0
         fprintf(1,'Simulating at %3.0f sec\n',k*dt);
     end
     % Calculate optimal control for given state
@@ -146,15 +146,15 @@ fprintf(1,'Simulation Time %2.0f min %2.0f sec \n',floor(solveTime/60),mod(solve
 %% Plot Results
 clc;
 figure; clf;
-t_base = linspace(t_0,t_max,length(b));
+t_1 = linspace(t_0,t_max,length(b));
 t = linspace(t_0,t_max,N);
 
 %current
 subplot(3,2,[1 2]);
-plot(t(1:N-1), I_sim,'k','LineWidth',0.5,'DisplayName','\beta=0');
+plot(t(1:N-1), I_sim,'k','LineWidth',0.5,'DisplayName','z_{max}=0.8');
 hold on
-plot(t_base(1:length(a1)), a1,'r','LineWidth',0.5,'DisplayName','\beta=0.5');
-plot(t_base(1:length(a1)), a,'b','LineWidth',0.5,'DisplayName','\beta=1');
+% plot(t_2(1:length(a1)), a1,'r','LineWidth',0.5,'DisplayName','280s');
+plot(t_1(1:length(a)), a,'b','LineWidth',0.5,'DisplayName','z_{max}=0.75');
 % plot(t,I_min.*ones(length(t),1),'r--','LineWidth',0.5,...
 %     'DisplayName','lb');
 % plot(t,I_max.*ones(length(t),1),'r--','LineWidth',0.5,...
@@ -170,8 +170,7 @@ lgd.Location = 'East';
 subplot(3,2,[3 4]);
 plot(t, SOC_sim,'k','LineWidth',0.5,'DisplayName','z_0=0.5');
 hold on
-plot(t_base, b1,'r','LineWidth',0.5,'DisplayName','z_0=0.25');
-plot(t_base, b,'b','LineWidth',0.5,'DisplayName','z_0=0.25');
+plot(t_1, b,'b','LineWidth',0.5,'DisplayName','z_0=0.25');
 % plot(t,z_min.*ones(length(t),1),'r--','LineWidth',0.5,...
 %     'DisplayName','z_{min}');
 % plot(t,z_max.*ones(length(t),1),'r--','LineWidth',0.5,...
@@ -185,8 +184,7 @@ ylabel('\it{z}','FontSize',13);
 subplot(3,2,5);
 plot(t(1:N-1), V_sim,'k','LineWidth',0.5,'DisplayName','z_0=0.5');
 hold on
-plot(t_base(1:length(a1)), d1,'r','LineWidth',0.5,'DisplayName','z_0=0.25');
-plot(t_base(1:length(a1)), d,'b','LineWidth',0.5,'DisplayName','z_0=0.25');
+plot(t_1(1:length(a)), d,'b','LineWidth',0.5,'DisplayName','z_0=0.25');
 % plot(t,V_min.*ones(length(t),1),'r--','LineWidth',0.5,...
 %     'DisplayName','V_{min}');
 % plot(t,V_max.*ones(length(t),1),'r--','LineWidth',0.5,...
@@ -199,19 +197,18 @@ ylabel('\it{V_T} \rm{[V]}','FontSize',13);
 subplot(3,2,6);
 plot(t, V1_sim,'k','LineWidth',0.5);
 hold on
-plot(t_base, c1,'r','LineWidth',0.5);
-plot(t_base, c,'b','LineWidth',0.5);
+plot(t_1, c,'b','LineWidth',0.5);
 hold off
 title('Capacitor voltage vs. time','FontSize',fs);
 xlabel('\it{t} \rm{[s]}','FontSize',13);
 ylabel('\it{V_{1}} \rm{[V]}','FontSize',13);
 %% Outdated
-a1 = I_sim;
-b1 = SOC_sim;
-c1 = V1_sim;
-d1 = V_sim;
-e1 = Voc_sim;
-save OCVRRC_beta05.mat a1 b1 c1 d1 e1
+a = I_sim;
+b = SOC_sim;
+c = V1_sim;
+d = V_sim;
+e = Voc_sim;
+save OCVRRC.mat a b c d e
 %{
 %% Write Data
 p_nm = ["Rc" "Ru" "Cc" "Cs" "z_0" "T_inf" "t_0" "C_1" "C_2" "R_0" "R_1" ...
