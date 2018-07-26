@@ -43,7 +43,6 @@ t_max = 5*60
 dt = 1
 N = t_max-t_0
 #%%Playground
-
 #%% Preallocate grid space
 #state grids
 SOC_grid = np.arange(SOC_min,SOC_max,0.005)
@@ -63,7 +62,7 @@ def DP():
         for idx in range(0,num_states):
             
             #lower/upper control bounds
-            v_oc = [V_oc[len(V_oc[:,0])*x,1] for x in V_oc[:,0] if x==SOC_grid[idx]][0]
+            v_oc = [V_oc[x,1] for x in range(0,len(V_oc[:,0])) if V_oc[x,0]==round(SOC_grid[idx],3)][0]
             lb = max(I_min, C_batt/dt*(SOC_grid[idx]-SOC_max), (V_min-v_oc)/R_0)
             ub = min(I_max, C_batt/dt*(SOC_grid[idx]-SOC_min), (V_max-v_oc)/R_0)
                 
@@ -77,7 +76,7 @@ def DP():
             SOC_nxt = SOC_grid[idx] + I_grid/C_batt*dt          
             
             #value function interpolation
-            V_nxt = interp(SOC_grid,SOC_nxt,V[:,k+1])
+            V_nxt = interp(SOC_nxt,SOC_grid,V[:,k+1])
             
             #Bellman
             V[idx,k] = min(c_k+V_nxt)
@@ -110,7 +109,7 @@ def sim(I_opt):
     for i in range(0,(N-1)):
         I_sim[i] = np.interp(SOC_grid,SOC_sim[i],I_opt[:,i])
         SOC_sim[i+1] = SOC_sim[i]+I_sim[i]*dt/C_batt
-        Voc_sim[i] = [V_oc[len(V_oc[:,0])*x,1] for x in V_oc[:,0] if x==SOC_sim[i]][0]
+        Voc_sim[i] = [V_oc[x,1] for x in range(0,len(V_oc[:,0])) if V_oc[x,0]==round(SOC_grid[i],3)][0]
         Vt_sim[i] = Voc_sim[i] + I_sim[i]*R_0
     
     ## Plot Simulation Results
