@@ -1,5 +1,5 @@
 %% OCV-R
-%   DP formulation for the max charge problem with OCV-R ECM 
+%   DP formulation for the min OCV-R SOC error problem
 %   Raja Selvakumar
 %   07/10/2018
 %   energy, Controls, and Application Lab (eCAL)
@@ -25,7 +25,7 @@ V_max = 3.6;
 z_min = 0.1;
 z_max = 0.75;
 C_batt = 2.3*3600;
-t_max = 8*60;
+t_max = 5*60;
 dt = 1;
 save ECM_params.mat;
 %% Voc save

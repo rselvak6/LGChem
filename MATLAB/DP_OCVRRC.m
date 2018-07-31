@@ -1,5 +1,5 @@
 %% OCV-R-RC
-%   DP formulation for the max charge problem with OCV-R-RC ECM 
+%   DP formulation for the min OCV-R-RC SOC error problem
 %   Raja Selvakumar
 %   07/12/2018
 %   energy, Controls, and Application Lab (eCAL)
@@ -45,10 +45,10 @@ fs = 15;
 clear VOC VOC_data;
 %% Playground
 %% Grid State and Preallocate
-SOC_grid = (z_min:0.05:z_max)';
+SOC_grid = (z_min:0.01:z_max)';
 V1_min = 0;
 V1_max = I_max*R_0;
-V1_grid = (V1_min:0.1:V1_max)';
+V1_grid = (V1_min:0.01:V1_max)';
 
 ns = [length(SOC_grid) length(V1_grid)];  % #states
 N = (t_max-t_0)/dt; % #iterations
@@ -61,8 +61,6 @@ tic;
 for i=1:ns(1)
     V(end,i,:) = (1-beta)*(SOC_grid(i)-z_target)^2; %terminal boundary condition
 end
-
-tol = eps(0.5);
 
 for k = (N-1):-1:1 %time
     if mod(k,10)==0

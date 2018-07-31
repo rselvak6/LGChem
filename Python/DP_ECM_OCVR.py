@@ -5,10 +5,9 @@ Created on Mon Jun 25 11:57:24 2018
 @author: rselvak6
 """
 import numpy as np
-import time as tm
+import time
 import math
 import matplotlib.pyplot as plt
-from scipy import interp
 
 #hyperparameters
 Rc = 1.94 #K/W
@@ -36,7 +35,7 @@ SOC_max = 0.75
 C_batt = 2.3*3600;
 
 #Voc from file
-V_oc = np.loadtxt('/home/rselvak6/Documents/LGChem/Python/Voc.dat',delimiter=',',dtype=float)
+V_oc = np.loadtxt('Voc.dat',delimiter=',',dtype=float)
 
 #free parameters
 t_max = 5*60
@@ -45,7 +44,7 @@ N = t_max-t_0
 #%%Playground
 #%% Preallocate grid space
 #state grids
-SOC_grid = np.arange(SOC_min,SOC_max,0.005)
+SOC_grid = np.arange(SOC_min,SOC_max+0.005,0.005)
 num_states = len(SOC_grid)
 
 #control and utility 
@@ -57,12 +56,12 @@ V[:,N] = [(SOC_grid[k]-SOC_max)**2 for k in range(0,num_states)]
 
 #%% DP
 def DP():
-    start = tm.time()
-    for k in range(t_max-1,t_0,-dt):
+    start = time.time()
+    for k in range(t_max-1,t_0-1,-dt):
         for idx in range(0,num_states):
             
             #lower/upper control bounds
-            v_oc = [V_oc[x,1] for x in range(0,len(V_oc[:,0])) if V_oc[x,0]==round(SOC_grid[idx],3)][0]
+            v_oc = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) if V_oc[x,0]==round(SOC_grid[idx],3)][0]
             lb = max(I_min, C_batt/dt*(SOC_grid[idx]-SOC_max), (V_min-v_oc)/R_0)
             ub = min(I_max, C_batt/dt*(SOC_grid[idx]-SOC_min), (V_max-v_oc)/R_0)
                 
@@ -76,7 +75,7 @@ def DP():
             SOC_nxt = SOC_grid[idx] + I_grid/C_batt*dt          
             
             #value function interpolation
-            V_nxt = interp(SOC_nxt,SOC_grid,V[:,k+1])
+            V_nxt = np.interp(SOC_nxt,SOC_grid,V[:,k+1])
             
             #Bellman
             V[idx,k] = min(c_k+V_nxt)
@@ -84,17 +83,16 @@ def DP():
             
             #save optimal control
             I_opt[idx,k] = I_grid[ind]
-    stop = tm.time()
-    print('DP Time:', '%.2f'%(stop-start),'s')
+    end = time.time()
+    print('DP solver time: \n',end-start)
     return I_opt
-#%% Simulation   
-def sim(I_opt):
-    t_sim = range(0,(N-1))
-    SOC_sim = [0]*N
-    Vt_sim = [0]*(N-1)
-    Voc_sim = [0]*(N-1)
-    I_sim = [0]*(N-1)
-    
+ret = DP()
+#%% Simulation: Initialize
+    t_sim = range(0,N)
+    SOC_sim = np.zeros(N)
+    Vt_sim = np.zeros(N)
+    Voc_sim = np.zeros(N)
+    I_sim = np.zeros(N)
     
     I_ub = [I_max]*N
     I_lb = [I_min]*N
@@ -105,43 +103,38 @@ def sim(I_opt):
     
     #initial condition
     SOC_sim[0] = SOC_min
+ #%% Simulation: Simulate
+   
+    for k in range(0,(N-1)):
+        I_sim[k] = np.interp(SOC_sim[k],SOC_grid,ret[:,k])
+        SOC_sim[k+1] = SOC_sim[k]+I_sim[k]*dt/C_batt
+        Voc_sim[k] = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) if V_oc[x,0]==round(SOC_sim[k],3)][0]
+        Vt_sim[k] = Voc_sim[k] + I_sim[k]*R_0
     
-    for i in range(0,(N-1)):
-        I_sim[i] = np.interp(SOC_grid,SOC_sim[i],I_opt[:,i])
-        SOC_sim[i+1] = SOC_sim[i]+I_sim[i]*dt/C_batt
-        Voc_sim[i] = [V_oc[x,1] for x in range(0,len(V_oc[:,0])) if V_oc[x,0]==round(SOC_grid[i],3)][0]
-        Vt_sim[i] = Voc_sim[i] + I_sim[i]*R_0
-    
-    ## Plot Simulation Results
+#%% Plot Simulation Results
     plt.figure(num=1, figsize=(10, 18), dpi=80, facecolor='w', edgecolor='k')
     plt.subplot2grid((3,2), (0,0), colspan = 2)
     # I vs time
-    ax1 = plt.plot(t_sim,I_sim,'b','linewidth',1.5,t_sim,I_ub,'r--',t_sim,I_lb,'r--')
+    ax1 = plt.plot(t_sim[0:N-1],I_sim,'b','linewidth',1.5,t_sim,I_ub,'r--',t_sim,I_lb,'r--')
     ax1.set_title('Current vs. time')
     ax1.set_ylabel('I [A]')
     
     plt.subplot2grid((3,2), (1,0), colspan = 2)
     # SOC vs time
-    ax2 = plt.plot(t_sim,SOC_sim[0:N-1],'b','linewidth',1.5,t_sim,z_ub,'r--',t_sim,z_lb,'r--')
+    ax2 = plt.plot(t_sim,SOC_sim,'b','linewidth',1.5,t_sim,z_ub,'r--',t_sim,z_lb,'r--')
     ax2.set_title('SOC (z) vs. time')
     ax2.set_ylabel('z')
     
     plt.subplot2grid((3,2), (2,0))
     # Vt vs time
-    ax3 = plt.plot(t_sim,Vt_sim,'b','linewidth',1.5,t_sim,v_ub,'r--',t_sim,v_lb,'r--')
+    ax3 = plt.plot(t_sim[0:N-1],Vt_sim,'b','linewidth',1.5,t_sim,v_ub,'r--',t_sim,v_lb,'r--')
     ax3.set_title('SOC (z) vs. time')
     ax3.set_ylabel('z')   
     
     plt.subplot2grid((3,2), (2,1))
     # Voc vs time
-    ax4 = plt.plot(t_sim,Voc_sim,'b','linewidth',1.5)
+    ax4 = plt.plot(t_sim[0:N-1],Voc_sim,'b','linewidth',1.5)
     ax4.set_title('Voc vs. time')
     ax4.set_ylabel('V_{oc} [V]')    
     
     plt.show()
-    
-    return
-
-#%% Main 
-ret = DP()
-sim(ret)
