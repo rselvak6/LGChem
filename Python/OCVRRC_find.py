@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Jun 25 11:57:24 2018
+Created on Tue Jul 31 16:53:18 2018
 
-@author: rselvak6
+@author: Raja Selvakumar
 """
+
 import numpy as np
+from scipy import interpolate as ip
 import time
 import math
 import matplotlib.pyplot as plt
@@ -40,53 +42,68 @@ V_oc = np.loadtxt('Voc.dat',delimiter=',',dtype=float)
 #free parameters
 t_max = 5*60
 dt = 1
-N = t_max-t_0
+N = int((t_max-t_0)/dt)
 #%%Playground
 #%% Preallocate grid space
 #state grids
-SOC_grid = np.arange(SOC_min,SOC_max+0.005,0.005)
-num_states = len(SOC_grid)
+SOC_grid = np.arange(SOC_min,SOC_max+0.01,0.01)
+V1_grid = np.arange(0,I_max*R_0+0.1,0.1)
+n1 = len(SOC_grid)
+n2 = len(V1_grid)
 
 #control and utility 
-V = np.ones((num_states,N+1))*math.inf
-I_opt = np.zeros((num_states,N))
+V = np.ones((N+1,n1,n2))*math.inf
+I_opt = np.zeros((N,n1,n2))
 
 #terminal Bellman
-V[:,N] = [(SOC_grid[k]-SOC_max)**2 for k in range(0,num_states)]
-
+for i in range(0,n1):
+    V[N,i,:] = (SOC_grid[i]-SOC_max)**2
 #%% DP
-def DP():
-    start = time.time()
-    for k in range(t_max-1,t_0-1,-dt):
-        for idx in range(0,num_states):
+start = time.time()
+for k in range(N-1,t_0-1,-dt):
+    if(k%10==0):
+        print('Computing the Principle of Optimality at %2.2f[s]\n',k*dt)
+    for ii in range(0,n1):
+        for jj in range(0,n2):
+            
+            c_soc = SOC_grid[ii]
+            c_v1 = V1_grid[jj]
             
             #lower/upper control bounds
-            v_oc = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) if V_oc[x,0]==round(SOC_grid[idx],3)][0]
-            lb = max(I_min, C_batt/dt*(SOC_grid[idx]-SOC_max), (V_min-v_oc)/R_0)
-            ub = min(I_max, C_batt/dt*(SOC_grid[idx]-SOC_min), (V_max-v_oc)/R_0)
-                
+            v_oc = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) if V_oc[x,0]==round(c_soc,3)][0]
+            I_vec = np.linspace(I_min,I_max,25)
+            
+            z_nxt_test = c_soc + dt/C_batt*I_vec
+            V_nxt_test = v_oc + c_v1 + I_vec*R_0
+            ind = np.argmin((z_nxt_test-SOC_min >= 0) & (SOC_max-z_nxt_test >= 0) & (V_nxt_test-V_min >= 0) & (V_max-V_nxt_test >= 0))
+#            z_lb = C_batt/dt*(c_soc-SOC_max)
+#            z_ub = C_batt/dt*(c_soc-SOC_min)
+#            V1_lb = (V_min-c_v1-v_oc)/R_0
+#            V1_ub = (V_max-c_v1-v_oc)/R_0
+#            lb = max(I_min, z_lb, V1_lb)
+#            ub = min(I_max, z_ub, V1_ub)
             #control initialization 
-            I_grid = np.linspace(lb,ub,200)
+#            I_grid = np.linspace(lb,ub,200)
             
             #value function
-            c_k = (SOC_grid[idx]-SOC_max)**2
+            c_k = (c_soc-SOC_max)**2
             
             #iterate next SOC
-            SOC_nxt = SOC_grid[idx] + I_grid/C_batt*dt          
+            SOC_nxt = c_soc + I_vec[ind]/C_batt*dt          
+            V1_nxt = c_v1*(1-dt/(R_1*C_1))+dt/C_1*I_vec[ind]
             
             #value function interpolation
-            V_nxt = np.interp(SOC_nxt,SOC_grid,V[:,k+1])
+            z = ip.interp2d(SOC_grid,V1_grid,np.transpose(np.squeeze(V[k+1,:,:])))
+            V_nxt = z(SOC_nxt,V1_nxt)
             
             #Bellman
-            V[idx,k] = min(c_k+V_nxt)
+            V[k,ii,jj] = min(c_k+V_nxt)
             ind = np.argmin(c_k+V_nxt)
             
             #save optimal control
-            I_opt[idx,k] = I_grid[ind]
-    end = time.time()
-    print('DP solver time: %2.2f[s]\n',end-start)
-    return I_opt
-ret = DP()
+            I_opt[k,ii,jj] = I_vec[ind]
+end = time.time()
+print('DP solver time: %2.2f[s]\n',end-start)
 #%% Simulation: Initialize
 t_sim = range(0,N)
 SOC_sim = np.zeros(N)
