@@ -46,7 +46,7 @@ N = int((t_max-t_0)/dt)
 #%%Playground
 #%% Preallocate grid space
 #state grids
-SOC_grid = np.arange(SOC_min,SOC_max+0.01,0.01)
+SOC_grid = np.arange(SOC_min,SOC_max+0.05,0.05)
 V1_grid = np.arange(0,I_max*R_0+0.1,0.1)
 n1 = len(SOC_grid)
 n2 = len(V1_grid)
@@ -76,14 +76,6 @@ for k in range(N-1,t_0-1,-dt):
             z_nxt_test = c_soc + dt/C_batt*I_vec
             V_nxt_test = v_oc + c_v1 + I_vec*R_0
             ind = np.argmin((z_nxt_test-SOC_min >= 0) & (SOC_max-z_nxt_test >= 0) & (V_nxt_test-V_min >= 0) & (V_max-V_nxt_test >= 0))
-#            z_lb = C_batt/dt*(c_soc-SOC_max)
-#            z_ub = C_batt/dt*(c_soc-SOC_min)
-#            V1_lb = (V_min-c_v1-v_oc)/R_0
-#            V1_ub = (V_max-c_v1-v_oc)/R_0
-#            lb = max(I_min, z_lb, V1_lb)
-#            ub = min(I_max, z_ub, V1_ub)
-            #control initialization 
-#            I_grid = np.linspace(lb,ub,200)
             
             #value function
             c_k = (c_soc-SOC_max)**2
@@ -93,11 +85,12 @@ for k in range(N-1,t_0-1,-dt):
             V1_nxt = c_v1*(1-dt/(R_1*C_1))+dt/C_1*I_vec[ind]
             
             #value function interpolation
-            z = ip.interp2d(SOC_grid,V1_grid,np.transpose(np.squeeze(V[k+1,:,:])))
-            V_nxt = z(SOC_nxt,V1_nxt)
+            z = ip.RectBivariateSpline(V1_grid,SOC_grid,np.matrix(np.squeeze(V[k+1,:,:])).T)
+            V_nxt = z(V1_nxt,SOC_nxt)
             
             #Bellman
-            V[k,ii,jj] = min(c_k+V_nxt)
+            test = c_k + V_nxt
+            V[k,ii,jj] = min(test[0,:])
             ind = np.argmin(c_k+V_nxt)
             
             #save optimal control
@@ -109,6 +102,7 @@ t_sim = range(0,N)
 SOC_sim = np.zeros(N)
 Vt_sim = np.zeros(N)
 Voc_sim = np.zeros(N)
+V1_sim = np.zeros(N)
 I_sim = np.zeros(N)
     
 I_ub = [I_max]*N
@@ -120,13 +114,22 @@ v_ub = [V_max]*N
     
 #initial condition
 SOC_sim[0] = 0.25
+V1_sim[0] = 0
  #%% Simulation: Simulate
    
 for k in range(0,(N-1)):
-    I_sim[k] = np.interp(SOC_sim[k],SOC_grid,ret[:,k])
-    SOC_sim[k+1] = SOC_sim[k]+I_sim[k]*dt/C_batt
+    #Control
+    if(k%10==0):
+        print('Simulating results at %2.2f[s]\n',k*dt)
+    z = ip.RectBivariateSpline(V1_grid,SOC_grid,np.squeeze(I_opt[k+1,:,:]))
+    I_sim[k] = z(V1_sim[k],SOC_sim[k])
+    
     Voc_sim[k] = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) if V_oc[x,0]==round(SOC_sim[k],3)][0]
-    Vt_sim[k] = Voc_sim[k] + I_sim[k]*R_0
+    Vt_sim[k] = Voc_sim[k] + V1_sim[k] + I_sim[k]*R_0
+    
+    #Dynamics
+    SOC_sim[k+1] = SOC_sim[k]+I_sim[k]*dt/C_batt
+    V1_sim[k+1] = V1_sim[k]*(1-dt/(R_1*C_1)) + dt/C_1*I_sim[k]
     
 #%% Plot Simulation Results
 plt.figure(num=1, figsize=(10, 18), dpi=80, facecolor='w', edgecolor='k')
@@ -159,10 +162,10 @@ plt.ylabel('$V_{t}$ [V]',fontsize=12)
     
 plt.subplot2grid((3,2), (2,1))
 # Voc vs time
-plt.plot(t_sim[0:N-1],Voc_sim[0:N-1],'b',linewidth=1.5)
+plt.plot(t_sim,V1_sim,'b',linewidth=1.5)
 plt.xlim(xmin=0.0)
-plt.title('Open Circuit Voltage',fontsize=15,fontweight='bold')
+plt.title('Capacitor Voltage',fontsize=15,fontweight='bold')
 plt.xlabel('Time [s]',fontsize=12)
-plt.ylabel('$V_{oc}$ [V]',fontsize=12)    
+plt.ylabel('$V_{1}$ [V]',fontsize=12)    
 
 plt.show()

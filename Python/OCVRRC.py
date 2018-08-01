@@ -46,8 +46,8 @@ N = int((t_max-t_0)/dt)
 #%%Playground
 #%% Preallocate grid space
 #state grids
-SOC_grid = np.arange(SOC_min,SOC_max+0.01,0.01)
-V1_grid = np.arange(0,I_max*R_0+0.01,0.01)
+SOC_grid = np.arange(SOC_min,SOC_max+0.05,0.05)
+V1_grid = np.arange(0,I_max*R_0+0.1,0.1)
 n1 = len(SOC_grid)
 n2 = len(V1_grid)
 
@@ -62,6 +62,8 @@ for i in range(0,n1):
 #%% DP
 start = time.time()
 for k in range(N-1,t_0-1,-dt):
+    if(k%10==0):
+        print('Computing the Principle of Optimality at %2.2f[s]\n',k*dt)
     for ii in range(0,n1):
         for jj in range(0,n2):
             
@@ -79,7 +81,7 @@ for k in range(N-1,t_0-1,-dt):
             ub = min(I_max, z_ub, V1_ub)
                 
             #control initialization 
-            I_grid = np.linspace(lb,ub,200)
+            I_grid = np.linspace(lb,ub,25)
             
             #value function
             c_k = (c_soc-SOC_max)**2
@@ -89,7 +91,7 @@ for k in range(N-1,t_0-1,-dt):
             V1_nxt = c_v1*(1-dt/(R_1*C_1))+dt/C_1*I_grid
             
             #value function interpolation
-            z = ip.interp2d(SOC_grid,V1_grid,np.transpose(np.squeeze(V[k+1,:,:])))
+            z = ip.RectBivariateSpline(SOC_grid,V1_grid,np.squeeze(V[k+1,:,:]))
             V_nxt = z(SOC_nxt,V1_nxt)
             
             #Bellman

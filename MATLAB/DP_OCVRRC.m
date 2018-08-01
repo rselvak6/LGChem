@@ -45,10 +45,10 @@ fs = 15;
 clear VOC VOC_data;
 %% Playground
 %% Grid State and Preallocate
-SOC_grid = (z_min:0.01:z_max)';
+SOC_grid = (z_min:0.05:z_max)';
 V1_min = 0;
 V1_max = I_max*R_0;
-V1_grid = (V1_min:0.01:V1_max)';
+V1_grid = (V1_min:0.1:V1_max)';
 
 ns = [length(SOC_grid) length(V1_grid)];  % #states
 N = (t_max-t_0)/dt; % #iterations
@@ -84,8 +84,6 @@ for k = (N-1):-1:1 %time
             I_grid = linspace(lb,ub,200)';
             
             % Cost-per-time-step
-            %cv = ones(length(I_grid),1).*abs(c_voc-V_max) + I_grid.*R_0;
-            %g_k = dt.*I_grid-cv;
             g_k = -beta*(c_soc-z_target)^2;
 
             % State dynamics
