@@ -40,7 +40,7 @@ C_batt = 2.3*3600;
 V_oc = np.loadtxt('Voc.dat',delimiter=',',dtype=float)
 
 #free parameters
-t_max = 5*60
+t_max = 1*20
 dt = 1
 N = int((t_max-t_0)/dt)
 #%%Playground
@@ -91,11 +91,12 @@ for k in range(N-1,t_0-1,-dt):
             V1_nxt = c_v1*(1-dt/(R_1*C_1))+dt/C_1*I_grid
             
             #value function interpolation
-            z = ip.RectBivariateSpline(SOC_grid,V1_grid,np.squeeze(V[k+1,:,:]))
-            V_nxt = z(SOC_nxt,V1_nxt)
+            z = ip.RectBivariateSpline(V1_grid,SOC_grid,np.matrix(np.squeeze(V[k+1,:,:])).T)
+            V_nxt = z(V1_grid[int(len(V1_grid)/2)],SOC_grid[int(len(V1_grid)/2)])
             
             #Bellman
-            V[k,ii,jj] = min(c_k+V_nxt)
+            test = c_k + V_nxt
+            V[k,ii,jj] = min(test)
             ind = np.argmin(c_k+V_nxt)
             
             #save optimal control

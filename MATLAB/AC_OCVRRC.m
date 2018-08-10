@@ -1,108 +1,57 @@
 %% OCV-R-RC
-%   DP formulation for the min OCV-R-RC SOC error problem
+%   ADP formulation for a OCV-R-RC equivalent circuit model of a 2300 mAh
+%   Li-ion A123 battery
 %   Raja Selvakumar
-%   07/12/2018
-%   energy, Controls, and Application Lab (eCAL)
+%   08/04/2018
+%   All parameter values taken from Perez, H.E; Hu, X; Dey, S; Moura, S.J. 2015 
 
-clc; clear;
-%% OCV save
-Rc = 1.94;
-Ru = 3.08;
-Cc = 62.7;
-Cs = 4.5;
-z_0 = 0.25;
-T_inf = 25;
-t_0 = 0;
-C_1 = 2500;
-C_2 = 5.5;
-R_0 = 0.01;
-R_1 = 0.01;
-R_2 = 0.02;
-I_min = 0;
-I_max = 46;
-V_min = 2;
-V_max = 3.6;
-z_min = 0.1;
-z_max = 0.95;
-z_target = 0.75;
-C_batt = 2.3*3600;
-t_max = 300;
-dt = 1;
-beta = 0.5;
-save ECM_params.mat;
-%% Voc save
-clear;
-VOC_data = csvread('Voc.dat',1,0);
-soc = VOC_data(:,1);
-voc = VOC_data(:,2);
-save OCV_params.mat;
 %% Load data
 clc; clear;
 load ECM_params.mat;
-load OCV_params.mat;
 load OCVRRC.mat;
 fs = 15;
-clear VOC VOC_data;
-%% Playground
-%% Grid State and Preallocate
-SOC_grid = (z_min:0.05:z_max)';
-V1_min = 0;
-V1_max = I_max*R_0;
-V1_grid = (V1_min:0.1:V1_max)';
+%% Initialize ADP variables
+N = (t_max-t_0)/dt; % total time scale
 
-ns = [length(SOC_grid) length(V1_grid)];  % #states
-N = (t_max-t_0)/dt; % #iterations
-
-V = inf*ones(N,ns(1),ns(2)); % #value function
-u_star = nan*ones(N-1,ns(1),ns(2));% #control
-%% Solve DP
+% ADP parameters
+iter = 500;
+eta_a = 7e-5;
+eta_c = 9e-5;
+N_ah = 3; % 1 hidden layer, 3 neurons
+N_ch = 3; 
+m = 2; % 2 states [SOC, V1]
+n = 1; % 1 output [I]
+%% Solve ADP
 clc;
 tic;
-for i=1:ns(1)
-    V(end,i,:) = (1-beta)*(SOC_grid(i)-z_target)^2; %terminal boundary condition
-end
-
-for k = (N-1):-1:1 %time
+x = [0.25; 0]; % initial values for states
+target = [z_target 0 0]'; % reward: get to SOC target
+for k = 1:(N-1) %time
     if mod(k,10)==0
-        fprintf(1,'Computing Principle of Optimality at %3.0f sec\n',k*dt);
+        fprintf(1,'Computing actor-critic algorithm at %3.0f sec\n',k*dt);
     end
-    for ii = 1:ns(1) %SOC
-        for jj=1:ns(2) %V_1
-            c_soc = SOC_grid(ii);
-            c_v1 = V1_grid(jj);
-            c_voc = voc(soc==round(c_soc,3)); %return voc when soc = c_soc 
-                   
-            % Bounds
-            z_lb = C_batt/dt*(c_soc-z_max);
-            z_ub = C_batt/dt*(c_soc-z_min);
-            V_lb = (V_min-c_voc-c_v1)/R_0;
-            V_ub = (V_max-c_voc-c_v1)/R_0;
-            lb = max([I_min,z_lb,V_lb]);
-            ub = min([I_max,z_ub,V_ub]);
-
-            % Control grid
-            I_grid = linspace(lb,ub,200)';
-            
-            % Cost-per-time-step
-            g_k = -beta*(c_soc-z_target)^2;
-
-            % State dynamics
-            SOC_nxt = c_soc+ dt/C_batt.*I_grid;
-            V1_nxt = c_v1*(1-dt/(R_1*C_1))+dt/C_1.*I_grid;
-            
-            % Linear interpolation for value function
-            V_nxt = interp2(SOC_grid,V1_grid,squeeze(V(k+1,:,:))',SOC_nxt,...
-                V1_nxt,'linear');   
-            [V(k,ii,jj), ind] = min(-g_k + V_nxt); %Bellman
-
-            % Save Optimal Control
-            u_star(k,ii,jj) = I_grid(ind);
+    
+    w_a1 = zeros(N_ah,m);
+    w_a2 = zeros(n,N_ah);
+    w_c1 = zeros(N_ch,m+n);
+    w_c2 = zeros(1,N_ch);
+    J_prev = 0;
+    
+    while e_c < tol
+        for i=1:iter
+            a = Actor(iter,w_a1,w_a2,eta_a);
+            a.q_az = applywa1(a,x);
+            u = applywa2(a);
+            c = Critic(iter,w_c1,w_c2,eta_c);
+            c.q_cs = applywc1(c,x,u);
+            J_hat = predictJ(c);
+            e_c = cerror(J_hat,J_prev,x,u,target);
         end
     end
 end
 
 solveTime = toc;
-fprintf(1,'DP Solver Time %2.0f min %2.0f sec \n',floor(solveTime/60),mod(solveTime,60));
+fprintf(1,'ADP Solver Time %2.0f min %2.0f sec \n',floor(solveTime/60),mod(solveTime,60));
 
 %% Simulate Results
 

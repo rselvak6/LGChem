@@ -40,7 +40,7 @@ C_batt = 2.3*3600;
 V_oc = np.loadtxt('Voc.dat',delimiter=',',dtype=float)
 
 #free parameters
-t_max = 5*60
+t_max = 1*20
 dt = 1
 N = int((t_max-t_0)/dt)
 #%%Playground
@@ -62,7 +62,7 @@ for i in range(0,n1):
 start = time.time()
 for k in range(N-1,t_0-1,-dt):
     if(k%10==0):
-        print('Computing the Principle of Optimality at %2.2f[s]\n',k*dt)
+        print("Computing the Principle of Optimality at %.0f s" % (k*dt))
     for ii in range(0,n1):
         for jj in range(0,n2):
             
@@ -71,7 +71,7 @@ for k in range(N-1,t_0-1,-dt):
             
             #lower/upper control bounds
             v_oc = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) if V_oc[x,0]==round(c_soc,3)][0]
-            I_vec = np.linspace(I_min,I_max,25)
+            I_vec = np.linspace(I_min,I_max,200)
             
             z_nxt_test = c_soc + dt/C_batt*I_vec
             V_nxt_test = v_oc + c_v1 + I_vec*R_0
@@ -84,19 +84,19 @@ for k in range(N-1,t_0-1,-dt):
             SOC_nxt = c_soc + I_vec[ind]/C_batt*dt          
             V1_nxt = c_v1*(1-dt/(R_1*C_1))+dt/C_1*I_vec[ind]
             
+            S_mesh, V_mesh = np.meshgrid(SOC_grid,V1_grid)
             #value function interpolation
-            z = ip.RectBivariateSpline(V1_grid,SOC_grid,np.matrix(np.squeeze(V[k+1,:,:])).T)
-            V_nxt = z(V1_nxt,SOC_nxt)
+            z = ip.interp2d(S_mesh,V_mesh,np.squeeze(V[k+1,:,:]).T)
+            V_nxt = z(SOC_grid[int(n1/2)], V1_grid[int(n2/2)])
             
             #Bellman
-            test = c_k + V_nxt
-            V[k,ii,jj] = min(test[0,:])
-            ind = np.argmin(c_k+V_nxt)
+            V[k,ii,jj] = min(c_k + V_nxt)
+            ind2 = np.argmin(c_k+V_nxt)
             
             #save optimal control
-            I_opt[k,ii,jj] = I_vec[ind]
+            I_opt[k,ii,jj] = I_vec[ind2]
 end = time.time()
-print('DP solver time: %2.2f[s]\n',end-start)
+print("DP solver time: %.2f s" % (end-start))
 #%% Simulation: Initialize
 t_sim = range(0,N)
 SOC_sim = np.zeros(N)
@@ -120,9 +120,10 @@ V1_sim[0] = 0
 for k in range(0,(N-1)):
     #Control
     if(k%10==0):
-        print('Simulating results at %2.2f[s]\n',k*dt)
-    z = ip.RectBivariateSpline(V1_grid,SOC_grid,np.squeeze(I_opt[k+1,:,:]))
-    I_sim[k] = z(V1_sim[k],SOC_sim[k])
+        print("Simulating results at %.0f s" % (k*dt))
+    S_mesh, V_mesh = np.meshgrid(SOC_grid,V1_grid)
+    z = ip.interp2d(S_mesh[0,:],V_mesh[:,0],np.squeeze(I_opt[k+1,:,:]).T,kind='cubic')
+    I_sim[k] = z(SOC_sim[k],V1_sim[k])
     
     Voc_sim[k] = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) if V_oc[x,0]==round(SOC_sim[k],3)][0]
     Vt_sim[k] = Voc_sim[k] + V1_sim[k] + I_sim[k]*R_0

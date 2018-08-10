@@ -1,0 +1,94 @@
+classdef Critic
+    %Critic: 
+    
+    properties
+        inst %return instance of critic
+        w_c1 %return first layer of critic weights for NN (size [Nch,m+n])
+        w_c2 %return second layer of critic weights for NN (size [1,Nch])
+        q_cs %return output value of NN (size [Nch,1])
+        sigma_cs %return input to neurons (size [Nch,1])
+        Nch %return number of neurons used in NN
+        eta_c %return actor learning rate
+    end
+    
+    methods
+        function self = Critic(inst, w_c1, w_c2, eta_c)
+            % Constructor- requires instance and weights
+            if nargin == 4
+                self.inst = inst;
+                self.w_c1 = w_c1;
+            	self.w_c2 = w_c2;
+                self.eta_c = eta_c;
+            else
+                error('Insufficient arguments for constructor')
+            end
+        end
+        
+        function q_cs = applywc1(self,x,u)
+            % Apply weights on states x and u (first NN layer)
+            [m,n] = size(x);
+            [m1,n1] = size(self.w_c1);
+            [m2,n2] = size(u);
+            if nargin > 0
+                if n~=1 || n2~=1
+                    error('States and control need to entered as a column vector')
+                end
+                if n1~=m+m2
+                    error('Primary weights need to match size of state & control vector')
+                end
+                self.Nch = m1;
+                self.sigma_cs = self.w_c1*[x;u];
+                q_cs = tanh(self.sigma_cs/2);
+            end
+        end
+        
+        function J_hat = predictJ(self)
+            % Predict value function (second NN layer)
+            [m,n] = size(self.q_cs);
+            [m1,n1] = size(self.w_c2);
+            if nargin > 0
+                if n~=1
+                    error('q needs to entered as a column vector')
+                end
+                if n1~=m
+                    error('Secondary weights need to match size of q vector')
+                end
+                J_hat = self.w_c2*self.q_cs;
+            end
+        end
+        
+       function e_c = cerror(~,J_hat,J_prev,x,u,target)
+            [m,n] = size(x);
+            [m1,n1] = size(u);
+            [m2,n2] = size(target);
+            if n~=1 || n1~=1 || n2~=1
+                error('States, control, and target vector need to entered as column vectors')
+            end
+            if m2~=m+m1
+                error('Primary weights need to match size of state & control vector')
+            end           
+            r = target-[x;u];
+            e_c = J_hat - (J_prev-r'*r);
+       end
+        
+       function Nch = getNNcnt(self)
+           % Return count of number of neurons used in NN
+           Nch = self.Nch;
+       end
+       
+       function [w_c1,w_c2] = updateWc(self,e_c,x,u)
+           % Return critic weight updates
+           dE_de = e_c;
+           de_dJ = 1;
+           dJ_dwc2 = tanh((self.w_c1*[x;u])/2)';
+           dJ_dwc1 = self.w_c2*sech((self.w_c1*[x;u])/2)*sech((self.w_c1*[x;u])/2)'*self.w_c1;
+           
+           dE_dwc1 = dE_de*de_dJ*dJ_dwc1;
+           dE_dwc2 = dE_de*de_dJ*dJ_dwc2;
+           w_c1 = self.w_c1 - self.eta_c*dE_dwc1;
+           w_c2 = self.w_c2 - self.eta_c*dE_dwc2;
+       end
+        
+    end
+end
+
