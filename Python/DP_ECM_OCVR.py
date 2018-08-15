@@ -61,7 +61,8 @@ def DP():
         for idx in range(0,num_states):
             
             #lower/upper control bounds
-            v_oc = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) if V_oc[x,0]==round(SOC_grid[idx],3)][0]
+            v_oc = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) 
+                   if V_oc[x,0]==round(SOC_grid[idx],3)][0]
             lb = max(I_min, C_batt/dt*(SOC_grid[idx]-SOC_max), (V_min-v_oc)/R_0)
             ub = min(I_max, C_batt/dt*(SOC_grid[idx]-SOC_min), (V_max-v_oc)/R_0)
                 
@@ -108,7 +109,8 @@ SOC_sim[0] = 0.25
 for k in range(0,(N-1)):
     I_sim[k] = np.interp(SOC_sim[k],SOC_grid,ret[:,k])
     SOC_sim[k+1] = SOC_sim[k]+I_sim[k]*dt/C_batt
-    Voc_sim[k] = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) if V_oc[x,0]==round(SOC_sim[k],3)][0]
+    Voc_sim[k] = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) 
+                 if V_oc[x,0]==round(SOC_sim[k],3)][0]
     Vt_sim[k] = Voc_sim[k] + I_sim[k]*R_0
     
 #%% Plot Simulation Results

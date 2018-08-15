@@ -70,12 +70,15 @@ for k in range(N-1,t_0-1,-dt):
             c_v1 = V1_grid[jj]
             
             #lower/upper control bounds
-            v_oc = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) if V_oc[x,0]==round(c_soc,3)][0]
+            v_oc = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) 
+                   if V_oc[x,0]==round(c_soc,3)][0]
             I_vec = np.linspace(I_min,I_max,200)
             
             z_nxt_test = c_soc + dt/C_batt*I_vec
             V_nxt_test = v_oc + c_v1 + I_vec*R_0
-            ind = np.argmin((z_nxt_test-SOC_min >= 0) & (SOC_max-z_nxt_test >= 0) & (V_nxt_test-V_min >= 0) & (V_max-V_nxt_test >= 0))
+            ind = np.argmin((z_nxt_test-SOC_min >= 0) & 
+                            (SOC_max-z_nxt_test >= 0) & (V_nxt_test-V_min >= 0) 
+                            & (V_max-V_nxt_test >= 0))
             
             #value function
             c_k = (c_soc-SOC_max)**2
@@ -122,10 +125,12 @@ for k in range(0,(N-1)):
     if(k%10==0):
         print("Simulating results at %.0f s" % (k*dt))
     S_mesh, V_mesh = np.meshgrid(SOC_grid,V1_grid)
-    z = ip.interp2d(S_mesh[0,:],V_mesh[:,0],np.squeeze(I_opt[k+1,:,:]).T,kind='cubic')
+    z = ip.interp2d(S_mesh[0,:],V_mesh[:,0],
+                    np.squeeze(I_opt[k+1,:,:]).T,kind='cubic')
     I_sim[k] = z(SOC_sim[k],V1_sim[k])
     
-    Voc_sim[k] = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) if V_oc[x,0]==round(SOC_sim[k],3)][0]
+    Voc_sim[k] = [V_oc[x,1] for x in range(0,len(V_oc[:,0])-1) 
+                 if V_oc[x,0]==round(SOC_sim[k],3)][0]
     Vt_sim[k] = Voc_sim[k] + V1_sim[k] + I_sim[k]*R_0
     
     #Dynamics

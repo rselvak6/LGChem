@@ -13,17 +13,9 @@ R_1 = 0.01;
 C_1 = 2500;
 I_max = 46;
 z_target = 0.75;
-save AC_ECM_params.mat;
-%% Load data
-clc; clear;
-load AC_ECM_params.mat;
-load OCVRRC.mat;
-fs = 15;
-%% Initialize actor-critic variables
 N = (t_max-t_0)/dt; % total time scale
-u = a; % optimal current (from DP solution)
 
-% A/C parameters
+%--Actor/critic parameters
 iter = 500;
 wc1_0 = 0.1;
 wc2_0 = 0.1;
@@ -34,43 +26,74 @@ N_ah = 3; % 1 hidden layer, 3 neurons
 N_ch = 3; 
 m = 2; % 2 states [SOC, V1]
 n = 1; % 1 output [I]
-% A/C matrices
+i_max = iter;
+
+% Matrices
 x_star = nan*ones(m,N);
 u_star = nan*ones(n,N-1);
-err = nan*ones(N,1);
-%% Solve ADP
+r_star = nan*ones(N,2);
+save AC_params.mat;
+%% Load data
+clc; clear;
+load AC_params.mat;
+load OCVRRC.mat;
+fs = 15;
+%% Initialize state and control
+x = [0.25; 0]; % initial values for states
+u = a; % optimal current (from DP solution)
+
+%% Main actor-critic routine
 clc;
 tic;
-x = [0.25; 0]; % initial values for states
-target = [z_target 0 0]'; % reward: get to SOC target
 
 for k = 1:N-1 %time
     if mod(k,10)==0
         fprintf(1,'Computing actor-critic algorithm at %3.0f sec\n',k*dt);
     end
+    % Create reward function expression
+    target = [z_target x(2) u(k)]'; % reward: get to SOC target
+    r_k = [x; u(k)]-target;
+    if k==1
+        J_prev = 0;
+    else
+        J_prev = r_star(k-1,1)'*r_star(k-1,1);
+    end
+    e_c = 1E5; % dummy large number
+
+    % Initialize weights
     w_c1 = wc1_0*ones(N_ch,m+n);
     w_c2 = wc2_0*ones(1,N_ch);
-    J_prev = 0;
-    st = iter;
-    e_c = 10;
     
+    % Initalize function approximation matrix
+    J_mat = nan*ones(i_max,1);
+    
+    % Repeat while the critic error is greater than the tolerance
     while e_c > tol
-        c = Critic(iter,w_c1,w_c2,eta_c);
-        c.q_cs = applywc1(c,x,u(k));
-        J_hat = predictJ(c);
-        e_c = cerror(c,J_hat,J_prev,x,u(k),target);
-        [w_c1,w_c2] = updateWc(c,e_c,x,u(k));
+        if iter == 0
+            e_c = min(J_mat);
+            iter = i_max-find(J_mat==e_c);
+            break
+        end
+        cr = Critic(iter,w_c1,w_c2,eta_c);
+        cr.q_cs = cr.applyw1(x,u(k));
+        J_hat = cr.predictJ();
+        [e_c,r] = cr.calcEc(J_hat,J_prev,x,u(k),target);
+        [w_c1,w_c2] = cr.updateWc(e_c,x,u(k));
         iter = iter-1;
         J_prev = J_hat;
+        J_mat(i_max-iter+1) = e_c;
     end
     
-    %Save optimal values and error
+    % Save optimal values
     x_star(:,k) = x;
     u_star(:,k) = u(k);
-    err(k) = e_c;
+    
+    % Save error and number of iterations needed to converge
+    r_star(k,1) = r'*r;
+    r_star(k,2) = i_max-iter;
     
     x = x.*[1;1-dt/(R_1*C_1)] + u(k)*dt*[1/C_batt;1/C_1]; % state update
-    iter = st; %reset iteration count
+    iter = i_max; %reset iteration count
 end
 
 solveTime = toc;
@@ -78,19 +101,14 @@ fprintf(1,'ADP Solver Time: %2.0f min %2.0f sec \n',floor(solveTime/60),mod(solv
 %% Plot Results
 clc;
 figure; clf;
-t_1 = linspace(t_0,t_max,length(b));
+t_1 = linspace(t_0,t_max,length(b)); %DP
 t = linspace(t_0,t_max,N);
 
-%current
+% Current
 subplot(3,2,[1 2]);
-plot(t(1:N-1), I_sim,'k','LineWidth',0.5,'DisplayName','z_{max}=0.8');
+plot(t(1:N-1), u_star,'k','LineWidth',0.5,'DisplayName','z_{max}=0.8');
 hold on
-% plot(t_2(1:length(a1)), a1,'r','LineWidth',0.5,'DisplayName','280s');
 plot(t_1(1:length(a)), a,'b','LineWidth',0.5,'DisplayName','z_{max}=0.75');
-% plot(t,I_min.*ones(length(t),1),'r--','LineWidth',0.5,...
-%     'DisplayName','lb');
-% plot(t,I_max.*ones(length(t),1),'r--','LineWidth',0.5,...
-%     'DisplayName','ub');
 hold off
 title('Current vs. time','FontSize',fs);
 ylabel('\it{I^{*}} \rm{[A]}','FontSize',13);
@@ -98,36 +116,18 @@ lgd = legend('show');
 lgd.FontSize = 10;
 lgd.Location = 'East';
 
-%SOC
+% SOC
 subplot(3,2,[3 4]);
-plot(t, SOC_sim,'k','LineWidth',0.5,'DisplayName','z_0=0.5');
+plot(t, x_star(1,k),'k','LineWidth',0.5,'DisplayName','z_0=0.5');
 hold on
 plot(t_1, b,'b','LineWidth',0.5,'DisplayName','z_0=0.25');
-% plot(t,z_min.*ones(length(t),1),'r--','LineWidth',0.5,...
-%     'DisplayName','z_{min}');
-% plot(t,z_max.*ones(length(t),1),'r--','LineWidth',0.5,...
-%     'DisplayName','z_{min}');
 hold off
 title('SOC vs. time','FontSize',fs);
-xlabel('\it{t} \rm{[s]}','FontSize',13);
 ylabel('\it{z}','FontSize',13);
 
-%terminal voltage
-subplot(3,2,5);
-plot(t(1:N-1), V_sim,'k','LineWidth',0.5,'DisplayName','z_0=0.5');
-hold on
-plot(t_1(1:length(a)), d,'b','LineWidth',0.5,'DisplayName','z_0=0.25');
-% plot(t,V_min.*ones(length(t),1),'r--','LineWidth',0.5,...
-%     'DisplayName','V_{min}');
-% plot(t,V_max.*ones(length(t),1),'r--','LineWidth',0.5,...
-%     'DisplayName','V_{max}');
-hold off
-title('Terminal voltage vs. time','FontSize',fs);
-xlabel('\it{t} \rm{[s]}','FontSize',13);
-ylabel('\it{V_T} \rm{[V]}','FontSize',13);
-
-subplot(3,2,6);
-plot(t, V1_sim,'k','LineWidth',0.5);
+% capacitor voltage
+subplot(3,2,[5 6]);
+plot(t, x_star(2,k),'k','LineWidth',0.5);
 hold on
 plot(t_1, c,'b','LineWidth',0.5);
 hold off

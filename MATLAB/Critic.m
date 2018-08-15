@@ -24,7 +24,7 @@ classdef Critic
             end
         end
         
-        function q_cs = applywc1(self,x,u)
+        function q_cs = applyw1(self,x,u)
             % Apply weights on states x and u (first NN layer)
             [m,n] = size(x);
             [m1,n1] = size(self.w_c1);
@@ -57,7 +57,7 @@ classdef Critic
             end
         end
         
-       function e_c = cerror(~,J_hat,J_prev,x,u,target)
+       function [e_c,r] = calcEc(~,J_hat,J_prev,x,u,target)
             [m,n] = size(x);
             [m1,n1] = size(u);
             [m2,n2] = size(target);
